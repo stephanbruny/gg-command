@@ -9,11 +9,10 @@ class ImageButton : Gtk.Button {
 	private bool entered = false; 
 	public delegate void OnClick();
 
-	private OnClick onClick;
+	public OnClick onClick;
 
-	public ImageButton(string path, double size, OnClick click) {
+	public ImageButton(string path, double size) {
 		this.size = size;
-		this.onClick = click;
 		this.surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, (int)size, (int)size);
 		this.set_app_paintable(false);
 		stdout.printf(path + "\n");
@@ -73,7 +72,7 @@ class ImageButton : Gtk.Button {
 			draw_background_active(ctx);
 		}
 		ctx.restore();
-		return true;
+		return false;
 	}
 }
 
@@ -124,8 +123,11 @@ class GgCommand : Gtk.Window {
 
 	private Cairo.ImageSurface surface;
 
-	public GgCommand(int height = 24) {
+	string configPath;
+
+	public GgCommand(int height = 24, string jsonConfigPath) {
 		Gdk.Window rootWin = Gdk.get_default_root_window();
+		this.configPath = jsonConfigPath;
 		this.width = rootWin.get_width();
 		this.height = height;
 		this.set_default_size(width, height);
@@ -135,11 +137,37 @@ class GgCommand : Gtk.Window {
 		this.decorated = false;
 		this.set_type_hint(Gdk.WindowTypeHint.DOCK);
 		this.surface = new Cairo.ImageSurface(Cairo.Format.ARGB32, this.width, this.height);
-		this.create_widgets();
+		this.create_widgets(this.configPath);
 		this.queue_draw();
 	}
 
-	private void create_widgets() {
+	private void load_tasklets_from_json(string path, Box taskletBox) {
+		Json.Parser parser = new Json.Parser();
+		try {
+			parser.load_from_file(path);		
+		} catch (Error err) {
+			stderr.printf(err.message + "\n");
+		}
+		var root = parser.get_root().get_object();
+		var tasklets = root.get_array_member("tasklets");
+		foreach (var taskletConf in tasklets.get_elements()) {
+			try {
+				var tasklet = taskletConf.get_object();
+				var widget = new ImageButton(iconPath + "/" + tasklet.get_string_member("icon"), this.height);
+				widget.onClick = () => {
+					Posix.system(tasklet.get_string_member("command"));
+				};
+				widget.set_tooltip_markup(tasklet.get_string_member("tooltip"));
+				widget.has_tooltip = true;
+				taskletBox.add(widget);
+			} catch (Error err) {
+				stderr.printf(err.message + "\n");
+			}
+		}
+		
+	}
+
+	private void create_widgets(string configPath) {
 		var area = new Box(Gtk.Orientation.HORIZONTAL, 0);
 		area.set_size_request(this.width, this.height);
 		area.draw.connect(on_draw);
@@ -148,21 +176,8 @@ class GgCommand : Gtk.Window {
 		area.add(systemIconBox);
 		area.add(taskletIconBox);
 	
-		var button = new ImageButton(iconPath + "/GRID.svg", this.height, () => {});
-		button.has_tooltip = true;
-		button.set_tooltip_markup("<b>Grid</b>");
-		var button2 = new ImageButton(iconPath + "/WIFI.svg", this.height, () => {});
-		button2.has_tooltip = true;
-		button2.set_tooltip_markup("<b>WIFI enabled</b>");
-		systemIconBox.add(new ImageButton(iconPath + "/HEART.svg", this.height, () => {}));
-		systemIconBox.add(new ImageButton(iconPath + "/POWER.svg", this.height, () => {
-			Posix.system("shutdown now");
-		}));
-		systemIconBox.add(new ImageButton(iconPath + "/BROWSER.svg", this.height, () => {
-			Posix.system("terminator &");
-		}));
-		systemIconBox.add(button);
-		systemIconBox.add(button2);
+		load_tasklets_from_json(configPath, systemIconBox);
+		
 		systemIconBox.set_size_request(this.width / 2, this.height);
 
 		taskletIconBox.set_halign(Align.END);
@@ -193,7 +208,7 @@ class GgCommand : Gtk.Window {
 
 	static int main(string[] args) {	
 		Gtk.init(ref args);
-		var self = new GgCommand(24);
+		var self = new GgCommand(24, "./ApplicationData/config.json");
 
 		self.show_all();
 
