@@ -85,7 +85,12 @@ class TimeTasklet : Gtk.Button {
 
 	public TimeTasklet(double height) {
 		this.height = height;
-		Timeout.add(1000, () => { this.now = new DateTime.now_local(); this.queue_draw(); return true; });
+		Timeout.add(1000, () => { 
+			this.now = new DateTime.now_local(); 
+			this.queue_draw();
+			this.set_tooltip_markup(this.now.format("%x")); 
+			return true; 
+		});
 		this.set_size_request((int)this.width, (int)this.height);
 	}
 
@@ -157,7 +162,7 @@ class GgCommand : Gtk.Window {
 				widget.onClick = () => {
 					Posix.system(tasklet.get_string_member("command"));
 				};
-				widget.set_tooltip_markup(tasklet.get_string_member("tooltip"));
+				// widget.set_tooltip_markup(tasklet.get_string_member("tooltip"));
 				widget.has_tooltip = true;
 				taskletBox.add(widget);
 			} catch (Error err) {
